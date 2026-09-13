@@ -1,11 +1,11 @@
-<!DOCTYPE html>
+          <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>GigaPub Publisher</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<!-- 1. GigaPub Ad Script -->
+<!-- GigaPub Ad Script -->
 <script src="https://ad.gigapub.tech/script?id=8165"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -100,8 +100,24 @@
   button:active { opacity: .8; }
   button:disabled { opacity: .5; cursor: not-allowed; }
 
-  button.secondary {
-    background: var(--green);
+  button.secondary { background: var(--green); }
+
+  /* Sponsored offer buttons */
+  .offer-btn {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-align: left;
+    margin-bottom: 10px;
+    background: var(--accent);
+  }
+  .offer-btn:last-child { margin-bottom: 0; }
+  .offer-btn .offer-label { font-size: 15px; font-weight: 600; }
+  .offer-btn .offer-reward {
+    font-size: 13px;
+    background: rgba(255,255,255,.2);
+    padding: 4px 10px;
+    border-radius: 20px;
   }
 
   .error { color: var(--red); font-size: 13px; margin-bottom: 10px; }
@@ -169,7 +185,7 @@
     </div>
   </div>
 
-  <!-- 2. Watch Ad to Earn -->
+  <!-- Watch Ad to Earn -->
   <div class="card">
     <h2>Watch Ad to Earn</h2>
     <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">
@@ -177,6 +193,27 @@
     </p>
     <button id="watchAdBtn" class="secondary">Watch Ad</button>
     <div id="adError" class="error hidden" style="margin-top:10px;"></div>
+  </div>
+
+  <!-- Sponsored Offers (Smart Links) -->
+  <div class="card">
+    <h2>Sponsored Offers</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">
+      Complete these offers to earn rewards instantly.
+    </p>
+    <button class="offer-btn" data-link="https://link.gigapub.tech/l/7prt535n0" data-reward="0.03">
+      <span class="offer-label">Offer 1</span>
+      <span class="offer-reward">+$0.03</span>
+    </button>
+    <button class="offer-btn" data-link="https://link.gigapub.tech/l/97fk8z4a5p" data-reward="0.03">
+      <span class="offer-label">Offer 2</span>
+      <span class="offer-reward">+$0.03</span>
+    </button>
+    <button class="offer-btn" data-link="https://link.gigapub.tech/l/md1or769j" data-reward="0.04">
+      <span class="offer-label">Offer 3</span>
+      <span class="offer-reward">+$0.04</span>
+    </button>
+    <div id="offerMsg" class="error hidden" style="margin-top:10px;"></div>
   </div>
 
   <!-- Withdraw -->
@@ -219,7 +256,7 @@
     ],
   };
 
-  const AD_REWARD = 0.05; // $0.05 per ad view
+  const AD_REWARD = 0.05; // $0.05 per rewarded video
 
   // ---- Telegram init ----
   const tg = window.Telegram?.WebApp;
@@ -247,6 +284,7 @@
   const listEl      = $('withdrawalsList');
   const watchAdBtn  = $('watchAdBtn');
   const adErrorEl   = $('adError');
+  const offerMsgEl  = $('offerMsg');
 
   // ---- Render ----
   function money(n) { return '$' + Number(n).toFixed(2); }
@@ -302,6 +340,13 @@
     errorEl.textContent = '';
   }
 
+  function creditEarnings(amount) {
+    state.earnings.available += amount;
+    state.earnings.today     += amount;
+    state.earnings.total     += amount;
+    renderEarnings();
+  }
+
   // ---- Withdraw submit ----
   formEl.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -350,7 +395,7 @@
     }
   });
 
-  // ---- 2. Watch Ad to Earn (GigaPub integration) ----
+  // ---- Watch Ad to Earn (GigaPub showGiga) ----
   watchAdBtn.addEventListener('click', async () => {
     adErrorEl.classList.add('hidden');
     adErrorEl.textContent = '';
@@ -365,15 +410,9 @@
     watchAdBtn.textContent = 'Loading ad…';
 
     try {
-      // 2. Call showGiga()
       await window.showGiga();
 
-      // Reward logic
-      state.earnings.available += AD_REWARD;
-      state.earnings.today     += AD_REWARD;
-      state.earnings.total     += AD_REWARD;
-
-      renderEarnings();
+      creditEarnings(AD_REWARD);
       tg?.HapticFeedback?.notificationOccurred('success');
       watchAdBtn.textContent = 'Reward Claimed!';
       setTimeout(() => { watchAdBtn.textContent = 'Watch Ad'; }, 1500);
@@ -386,6 +425,48 @@
     } finally {
       watchAdBtn.disabled = false;
     }
+  });
+
+  // ---- Smart Links (Sponsored Offers) ----
+  function openSmartLink(url, reward, btn) {
+    // Open the smart link inside Telegram (external browser)
+    if (tg && typeof tg.openLink === 'function') {
+      tg.openLink(url, { try_instant_view: false });
+    } else {
+      window.open(url, '_blank');
+    }
+
+    // Reward logic (client-side placeholder — verify server-side in production)
+    creditEarnings(reward);
+    tg?.HapticFeedback?.notificationOccurred('success');
+
+    offerMsgEl.style.color = 'var(--green)';
+    offerMsgEl.textContent = `Reward of $${reward.toFixed(2)} credited!`;
+    offerMsgEl.classList.remove('hidden');
+
+    // Visual feedback on the button
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="offer-label">Reward Claimed!</span><span class="offer-reward">✓</span>';
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }, 2000);
+  }
+
+  document.querySelectorAll('.offer-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const url = btn.dataset.link;
+      const reward = parseFloat(btn.dataset.reward) || 0;
+
+      if (!url) {
+        offerMsgEl.style.color = 'var(--red)';
+        offerMsgEl.textContent = 'Offer link unavailable.';
+        offerMsgEl.classList.remove('hidden');
+        return;
+      }
+      openSmartLink(url, reward, btn);
+    });
   });
 
   // ---- Boot ----
