@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>GigaPub Publisher</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<!-- 1. GigaPub Ad Script -->
+<script src="https://ad.gigapub.tech/script?id=8165"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   :root {
@@ -98,6 +100,10 @@
   button:active { opacity: .8; }
   button:disabled { opacity: .5; cursor: not-allowed; }
 
+  button.secondary {
+    background: var(--green);
+  }
+
   .error { color: var(--red); font-size: 13px; margin-bottom: 10px; }
 
   /* Withdrawals list */
@@ -163,6 +169,16 @@
     </div>
   </div>
 
+  <!-- 2. Watch Ad to Earn -->
+  <div class="card">
+    <h2>Watch Ad to Earn</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">
+      Watch a short rewarded video to earn $0.05.
+    </p>
+    <button id="watchAdBtn" class="secondary">Watch Ad</button>
+    <div id="adError" class="error hidden" style="margin-top:10px;"></div>
+  </div>
+
   <!-- Withdraw -->
   <div class="card">
     <h2>Request Withdrawal</h2>
@@ -203,6 +219,8 @@
     ],
   };
 
+  const AD_REWARD = 0.05; // $0.05 per ad view
+
   // ---- Telegram init ----
   const tg = window.Telegram?.WebApp;
   if (tg) {
@@ -227,6 +245,8 @@
   const errorEl     = $('formError');
   const submitBtn   = $('submitBtn');
   const listEl      = $('withdrawalsList');
+  const watchAdBtn  = $('watchAdBtn');
+  const adErrorEl   = $('adError');
 
   // ---- Render ----
   function money(n) { return '$' + Number(n).toFixed(2); }
@@ -303,8 +323,6 @@
     submitBtn.textContent = 'Processing…';
 
     try {
-      // ---- Replace with real API call ----
-      // const res = await fetch('https://partner.giga.pub/api/withdraw', {...});
       await new Promise(r => setTimeout(r, 700)); // simulate network
 
       const withdrawal = {
@@ -329,6 +347,44 @@
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Withdraw';
+    }
+  });
+
+  // ---- 2. Watch Ad to Earn (GigaPub integration) ----
+  watchAdBtn.addEventListener('click', async () => {
+    adErrorEl.classList.add('hidden');
+    adErrorEl.textContent = '';
+
+    if (typeof window.showGiga !== 'function') {
+      adErrorEl.textContent = 'Ad service unavailable. Please try again later.';
+      adErrorEl.classList.remove('hidden');
+      return;
+    }
+
+    watchAdBtn.disabled = true;
+    watchAdBtn.textContent = 'Loading ad…';
+
+    try {
+      // 2. Call showGiga()
+      await window.showGiga();
+
+      // Reward logic
+      state.earnings.available += AD_REWARD;
+      state.earnings.today     += AD_REWARD;
+      state.earnings.total     += AD_REWARD;
+
+      renderEarnings();
+      tg?.HapticFeedback?.notificationOccurred('success');
+      watchAdBtn.textContent = 'Reward Claimed!';
+      setTimeout(() => { watchAdBtn.textContent = 'Watch Ad'; }, 1500);
+    } catch (e) {
+      console.error('GigaPub ad error:', e);
+      adErrorEl.textContent = 'Ad could not be shown. Please try again.';
+      adErrorEl.classList.remove('hidden');
+      tg?.HapticFeedback?.notificationOccurred('error');
+      watchAdBtn.textContent = 'Watch Ad';
+    } finally {
+      watchAdBtn.disabled = false;
     }
   });
 
