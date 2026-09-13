@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>GigaPub Publisher</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --bg: #ffffff;
+    --card: #f4f5f7;
+    --text: #111827;
+    --muted: #6b7280;
+    --accent: #2481cc;
+    --green: #16a34a;
+    --yellow: #d97706;
+    --red: #dc2626;
+    --border: #e5e7eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1e;
+      --card: #2c2c2e;
+      --text: #f9fafb;
+      --muted: #9ca3af;
+      --border: #3a3a3c;
+    }
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 16px;
+    padding-bottom: 32px;
+  }
+  .container { max-width: 480px; margin: 0 auto; }
+
+  /* Header */
+  .header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .avatar {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 18px; flex-shrink: 0;
+  }
+  .header-info h1 { font-size: 18px; font-weight: 700; }
+  .header-info p { font-size: 13px; color: var(--muted); }
+
+  /* Cards */
+  .card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+
+  /* Earnings grid */
+  .earnings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .earning-item .label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .earning-item .value { font-size: 20px; font-weight: 700; }
+  .value.green { color: var(--green); }
+  .value.yellow { color: var(--yellow); }
+
+  /* Form */
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  input, select {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    margin-bottom: 14px;
+    outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+
+  button {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 10px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .15s;
+  }
+  button:active { opacity: .8; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+
+  .error { color: var(--red); font-size: 13px; margin-bottom: 10px; }
+
+  /* Withdrawals list */
+  .withdrawal {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .withdrawal:last-child { border-bottom: none; }
+  .withdrawal .amount { font-weight: 600; font-size: 15px; }
+  .withdrawal .date { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .status { font-size: 13px; font-weight: 600; text-transform: capitalize; }
+  .status.pending { color: var(--yellow); }
+  .status.completed { color: var(--green); }
+  .status.failed { color: var(--red); }
+
+  .empty { font-size: 13px; color: var(--muted); text-align: center; padding: 12px 0; }
+
+  /* Loading */
+  #loading {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; color: var(--muted); font-size: 14px;
+  }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="loading">Loading…</div>
+
+<div id="app" class="container hidden">
+  <!-- Header -->
+  <div class="header">
+    <div class="avatar" id="avatar">?</div>
+    <div class="header-info">
+      <h1 id="greeting">Hello!</h1>
+      <p id="username">@publisher</p>
+    </div>
+  </div>
+
+  <!-- Earnings -->
+  <div class="card">
+    <h2>Earnings Overview</h2>
+    <div class="earnings-grid">
+      <div class="earning-item">
+        <div class="label">Total</div>
+        <div class="value" id="total">$0.00</div>
+      </div>
+      <div class="earning-item">
+        <div class="label">Available</div>
+        <div class="value green" id="available">$0.00</div>
+      </div>
+      <div class="earning-item">
+        <div class="label">Pending</div>
+        <div class="value yellow" id="pending">$0.00</div>
+      </div>
+      <div class="earning-item">
+        <div class="label">Today</div>
+        <div class="value" id="today">$0.00</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Withdraw -->
+  <div class="card">
+    <h2>Request Withdrawal</h2>
+    <form id="withdrawForm">
+      <label for="amount">Amount</label>
+      <input id="amount" type="number" min="0" step="0.01" placeholder="0.00" />
+
+      <label for="currency">Currency</label>
+      <select id="currency">
+        <option value="TON">TON</option>
+        <option value="USDT">USDT</option>
+      </select>
+
+      <div id="formError" class="error hidden"></div>
+      <button type="submit" id="submitBtn">Withdraw</button>
+    </form>
+  </div>
+
+  <!-- History -->
+  <div class="card">
+    <h2>Recent Withdrawals</h2>
+    <div id="withdrawalsList"></div>
+  </div>
+</div>
+
+<script>
+  // ---- Mock data (replace with real GigaPub API calls later) ----
+  const state = {
+    earnings: {
+      total: 1250.75,
+      available: 320.5,
+      pending: 50.25,
+      today: 12.4,
+    },
+    withdrawals: [
+      { id: '1', amount: 100, currency: 'TON', status: 'completed', date: '2026-02-15T10:00:00Z' },
+      { id: '2', amount: 50,  currency: 'USDT', status: 'pending',   date: '2026-02-18T14:30:00Z' },
+    ],
+  };
+
+  // ---- Telegram init ----
+  const tg = window.Telegram?.WebApp;
+  if (tg) {
+    tg.ready();
+    tg.expand();
+  }
+
+  // ---- DOM refs ----
+  const $ = (id) => document.getElementById(id);
+  const loadingEl   = $('loading');
+  const appEl       = $('app');
+  const avatarEl    = $('avatar');
+  const greetingEl  = $('greeting');
+  const usernameEl  = $('username');
+  const totalEl     = $('total');
+  const availableEl = $('available');
+  const pendingEl   = $('pending');
+  const todayEl     = $('today');
+  const formEl      = $('withdrawForm');
+  const amountEl    = $('amount');
+  const currencyEl  = $('currency');
+  const errorEl     = $('formError');
+  const submitBtn   = $('submitBtn');
+  const listEl      = $('withdrawalsList');
+
+  // ---- Render ----
+  function money(n) { return '$' + Number(n).toFixed(2); }
+
+  function renderUser() {
+    const user = tg?.initDataUnsafe?.user;
+    if (user) {
+      const name = user.first_name || 'Publisher';
+      greetingEl.textContent = `Hello, ${name}!`;
+      usernameEl.textContent = '@' + (user.username || 'publisher');
+      avatarEl.textContent = name.charAt(0).toUpperCase();
+      if (user.photo_url) {
+        avatarEl.style.backgroundImage = `url(${user.photo_url})`;
+        avatarEl.style.backgroundSize = 'cover';
+        avatarEl.textContent = '';
+      }
+    } else {
+      greetingEl.textContent = 'Hello, Publisher!';
+      usernameEl.textContent = '@publisher';
+      avatarEl.textContent = 'P';
+    }
+  }
+
+  function renderEarnings() {
+    totalEl.textContent     = money(state.earnings.total);
+    availableEl.textContent = money(state.earnings.available);
+    pendingEl.textContent   = money(state.earnings.pending);
+    todayEl.textContent     = money(state.earnings.today);
+  }
+
+  function renderWithdrawals() {
+    if (!state.withdrawals.length) {
+      listEl.innerHTML = '<div class="empty">No withdrawals yet.</div>';
+      return;
+    }
+    listEl.innerHTML = state.withdrawals.map(w => `
+      <div class="withdrawal">
+        <div>
+          <div class="amount">${w.amount} ${w.currency}</div>
+          <div class="date">${new Date(w.date).toLocaleDateString()}</div>
+        </div>
+        <div class="status ${w.status}">${w.status}</div>
+      </div>
+    `).join('');
+  }
+
+  function showError(msg) {
+    errorEl.textContent = msg;
+    errorEl.classList.remove('hidden');
+  }
+  function clearError() {
+    errorEl.classList.add('hidden');
+    errorEl.textContent = '';
+  }
+
+  // ---- Withdraw submit ----
+  formEl.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearError();
+
+    const amount = parseFloat(amountEl.value);
+    const currency = currencyEl.value;
+
+    if (isNaN(amount) || amount <= 0) {
+      showError('Please enter a valid amount.');
+      return;
+    }
+    if (amount > state.earnings.available) {
+      showError('Insufficient available balance.');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Processing…';
+
+    try {
+      // ---- Replace with real API call ----
+      // const res = await fetch('https://partner.giga.pub/api/withdraw', {...});
+      await new Promise(r => setTimeout(r, 700)); // simulate network
+
+      const withdrawal = {
+        id: String(Date.now()),
+        amount,
+        currency,
+        status: 'pending',
+        date: new Date().toISOString(),
+      };
+
+      state.withdrawals.unshift(withdrawal);
+      state.earnings.available -= amount;
+      state.earnings.pending   += amount;
+
+      renderWithdrawals();
+      renderEarnings();
+      amountEl.value = '';
+      tg?.HapticFeedback?.notificationOccurred('success');
+    } catch (err) {
+      showError('Something went wrong. Try again.');
+      tg?.HapticFeedback?.notificationOccurred('error');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Withdraw';
+    }
+  });
+
+  // ---- Boot ----
+  renderUser();
+  renderEarnings();
+  renderWithdrawals();
+  loadingEl.classList.add('hidden');
+  appEl.classList.remove('hidden');
+</script>
+</body>
+</html>
