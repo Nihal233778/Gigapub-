@@ -1,11 +1,11 @@
-<!DOCTYPE html>
+              <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>GigaPub Publisher</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<!-- 1. GigaPub Rewarded Ad Script -->
+<!-- GigaPub Rewarded Ad Script -->
 <script src="https://ad.gigapub.tech/script?id=8165"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -103,7 +103,25 @@
   button.secondary { background: var(--green); }
   button.warning   { background: var(--yellow); }
 
-  .error { color: var(--red); font-size: 13px; margin-bottom: 10px; }
+  /* Sponsored offer buttons */
+  .offer-btn {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-align: left;
+    margin-bottom: 10px;
+    background: var(--accent);
+  }
+  .offer-btn:last-child { margin-bottom: 0; }
+  .offer-btn .offer-label { font-size: 15px; font-weight: 600; }
+  .offer-btn .offer-reward {
+    font-size: 13px;
+    background: rgba(255,255,255,.2);
+    padding: 4px 10px;
+    border-radius: 20px;
+  }
+
+  .error   { color: var(--red);   font-size: 13px; margin-bottom: 10px; }
   .success { color: var(--green); font-size: 13px; margin-bottom: 10px; }
 
   /* Withdrawals list */
@@ -179,13 +197,34 @@
     <div id="adError" class="error hidden" style="margin-top:10px;"></div>
   </div>
 
-  <!-- Offerwall -->
+  <!-- Sponsored Offers (Smart Links) -->
   <div class="card">
-    <h2>🎁 Complete Offers</h2>
+    <h2>Sponsored Offers</h2>
     <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">
-      Complete tasks in the offerwall to earn real rewards instantly.
+      Tap an offer below to earn instant rewards.
     </p>
-    <button id="rewards-button">Open Offerwall</button>
+    <button class="offer-btn" data-link="https://link.gigapub.tech/l/7prt535n0" data-reward="0.03">
+      <span class="offer-label">Offer 1</span>
+      <span class="offer-reward">+$0.03</span>
+    </button>
+    <button class="offer-btn" data-link="https://link.gigapub.tech/l/97fk8z4a5p" data-reward="0.03">
+      <span class="offer-label">Offer 2</span>
+      <span class="offer-reward">+$0.03</span>
+    </button>
+    <button class="offer-btn" data-link="https://link.gigapub.tech/l/md1or769j" data-reward="0.04">
+      <span class="offer-label">Offer 3</span>
+      <span class="offer-reward">+$0.04</span>
+    </button>
+    <div id="offerMsg" class="hidden" style="margin-top:10px;"></div>
+  </div>
+
+  <!-- Offerwall (SDK) -->
+  <div class="card">
+    <h2>🎁 More Offers</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">
+      Open the offerwall to browse more tasks and earn bigger rewards.
+    </p>
+    <button id="rewards-button" class="warning">Open Offerwall</button>
     <div id="offerwallMsg" class="hidden" style="margin-top:10px;"></div>
   </div>
 
@@ -229,7 +268,7 @@
     ],
   };
 
-  const AD_REWARD = 0.05;
+  const AD_REWARD  = 0.05;
   const PROJECT_ID = '8165';
 
   // ---- Telegram init ----
@@ -258,6 +297,7 @@
   const listEl        = $('withdrawalsList');
   const watchAdBtn    = $('watchAdBtn');
   const adErrorEl     = $('adError');
+  const offerMsgEl    = $('offerMsg');
   const rewardsBtn    = $('rewards-button');
   const offerwallMsg  = $('offerwallMsg');
 
@@ -306,8 +346,8 @@
     `).join('');
   }
 
-  function showError(msg)   { errorEl.textContent = msg; errorEl.classList.remove('hidden'); }
-  function clearError()     { errorEl.classList.add('hidden'); errorEl.textContent = ''; }
+  function showError(msg) { errorEl.textContent = msg; errorEl.classList.remove('hidden'); }
+  function clearError()   { errorEl.classList.add('hidden'); errorEl.textContent = ''; }
 
   function creditEarnings(amount) {
     state.earnings.available += amount;
@@ -318,11 +358,11 @@
 
   function showOfferwallMsg(text, type = 'success') {
     offerwallMsg.textContent = text;
-    offerwallMsg.className = type; // 'success' or 'error'
+    offerwallMsg.className = type;
     offerwallMsg.classList.remove('hidden');
   }
 
-  // ---- 1. Reward credit handler (called from SDK event) ----
+  // ---- Reward credit handler (shared by smart links + SDK) ----
   async function creditUserReward(userId, amount) {
     console.log(`Crediting user ${userId} with $${amount}`);
     creditEarnings(Number(amount) || 0);
@@ -406,7 +446,49 @@
   });
 
   // ======================================================
-  // OFFERWALL SDK INTEGRATION (Steps 1, 2, 3 from docs)
+  // SMART LINKS (Sponsored Offers)
+  // ======================================================
+  function openSmartLink(url, reward, btn) {
+    if (tg && typeof tg.openLink === 'function') {
+      tg.openLink(url, { try_instant_view: false });
+    } else {
+      window.open(url, '_blank');
+    }
+
+    // Reward logic (client-side placeholder — verify server-side in production)
+    creditEarnings(reward);
+    tg?.HapticFeedback?.notificationOccurred('success');
+
+    offerMsgEl.className = 'success';
+    offerMsgEl.textContent = `Reward of $${reward.toFixed(2)} credited!`;
+    offerMsgEl.classList.remove('hidden');
+
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="offer-label">Reward Claimed!</span><span class="offer-reward">✓</span>';
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }, 2000);
+  }
+
+  document.querySelectorAll('.offer-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const url    = btn.dataset.link;
+      const reward = parseFloat(btn.dataset.reward) || 0;
+
+      if (!url) {
+        offerMsgEl.className = 'error';
+        offerMsgEl.textContent = 'Offer link unavailable.';
+        offerMsgEl.classList.remove('hidden');
+        return;
+      }
+      openSmartLink(url, reward, btn);
+    });
+  });
+
+  // ======================================================
+  // OFFERWALL SDK INTEGRATION (Steps 1, 2, 3)
   // ======================================================
 
   // ---- Step 1: Load SDK script dynamically ----
@@ -430,7 +512,6 @@
           console.log('Reward claim received:', data);
           try {
             await creditUserReward(data.userId, data.amount);
-            // Confirm the reward back to GigaPub so it's marked as paid
             await sdk.confirmReward(data.rewardId, data.hash);
             console.log('Reward confirmed:', data.rewardId);
           } catch (err) {
@@ -472,5 +553,4 @@
   appEl.classList.remove('hidden');
 </script>
 </body>
-</html>                  
-      
+</html>
